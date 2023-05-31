@@ -130,165 +130,378 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
     }
 
     // Basic Eth to 721
-    function test_benchmarkBuySingleListingNoFees(FuzzInputsCommon memory inputs) public {
-        vm.assume(inputs.paymentAmount > 0);
+    function test_benchmarkBuySingleListingNoFeesNoConduit(FuzzInputsCommon memory inputs) public {
         vm.assume(inputs.useConduit == false);
 
-        addErc721OfferItem(inputs.tokenId);
-        addEthConsiderationItem(alice, inputs.paymentAmount);
-        _configureBasicOrderParametersEthTo721(inputs);
+        uint128 paymentAmount = 100 ether;
 
-        test721_1.mint(alice, inputs.tokenId);
+        for (uint256 tokenId = 1; tokenId <= 100; tokenId++) {
+            FuzzInputsCommon memory remappedInputs = inputs;
+            remappedInputs.paymentAmount = paymentAmount;
+            remappedInputs.tokenId = tokenId;
 
-        configureOrderComponents(
-            inputs.zone,
-            inputs.zoneHash,
-            inputs.salt,
-            inputs.useConduit ? conduitKeyOne : bytes32(0)
-        );
-        uint256 counter = seaport.getCounter(alice);
-        baseOrderComponents.counter = counter;
-        bytes32 orderHash = seaport.getOrderHash(
-            baseOrderComponents
-        );
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            orderHash
-        );
+            addErc721OfferItem(remappedInputs.tokenId);
+            addEthConsiderationItem(alice, remappedInputs.paymentAmount);
+            _configureBasicOrderParametersEthTo721(remappedInputs);
+    
+            test721_1.mint(alice, remappedInputs.tokenId);
+    
+            configureOrderComponents(
+                remappedInputs.zone,
+                remappedInputs.zoneHash,
+                remappedInputs.salt,
+                remappedInputs.useConduit ? conduitKeyOne : bytes32(0)
+            );
+            uint256 counter = seaport.getCounter(alice);
+            baseOrderComponents.counter = counter;
+            bytes32 orderHash = seaport.getOrderHash(
+                baseOrderComponents
+            );
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                orderHash
+            );
+    
+            basicOrderParameters.signature = signature;
+    
+            vm.prank(bob);
+            seaport.fulfillBasicOrder{
+                value: remappedInputs.paymentAmount
+            }(basicOrderParameters);
 
-        basicOrderParameters.signature = signature;
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+        }
+    }
 
-        vm.prank(bob);
-        seaport.fulfillBasicOrder{
-            value: inputs.paymentAmount
-        }(basicOrderParameters);
+    function test_benchmarkBuySingleListingNoFeesUseConduit(FuzzInputsCommon memory inputs) public {
+        vm.assume(inputs.useConduit == true);
+
+        uint128 paymentAmount = 100 ether;
+
+        for (uint256 tokenId = 1; tokenId <= 100; tokenId++) {
+            FuzzInputsCommon memory remappedInputs = inputs;
+            remappedInputs.paymentAmount = paymentAmount;
+            remappedInputs.tokenId = tokenId;
+
+            addErc721OfferItem(remappedInputs.tokenId);
+            addEthConsiderationItem(alice, remappedInputs.paymentAmount);
+            _configureBasicOrderParametersEthTo721(remappedInputs);
+    
+            test721_1.mint(alice, remappedInputs.tokenId);
+    
+            configureOrderComponents(
+                remappedInputs.zone,
+                remappedInputs.zoneHash,
+                remappedInputs.salt,
+                remappedInputs.useConduit ? conduitKeyOne : bytes32(0)
+            );
+            uint256 counter = seaport.getCounter(alice);
+            baseOrderComponents.counter = counter;
+            bytes32 orderHash = seaport.getOrderHash(
+                baseOrderComponents
+            );
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                orderHash
+            );
+    
+            basicOrderParameters.signature = signature;
+    
+            vm.prank(bob);
+            seaport.fulfillBasicOrder{
+                value: remappedInputs.paymentAmount
+            }(basicOrderParameters);
+
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+        }
     }
 
     // Basic Eth to 721 with one additional recipient
-    function test_benchmarkBuySingleListingMarketplaceFees(
-        FuzzInputsCommon memory inputs) public {
-        vm.assume(inputs.paymentAmount > 0);
+    function test_benchmarkBuySingleListingMarketplaceFeesNoConduit(FuzzInputsCommon memory inputs) public {
         vm.assume(inputs.useConduit == false);
-        vm.assume(inputs.paymentAmount < 10);
-        uint256 finalAdditionalRecipients = 1;
 
-        addErc721OfferItem(inputs.tokenId);
-        addEthConsiderationItem(alice, 1);
+        uint128 paymentAmount = 95 ether;
+        uint128 marketplaceFee = 5 ether;
 
-        AdditionalRecipient[]
+        for (uint256 tokenId = 1; tokenId <= 100; tokenId++) {
+            FuzzInputsCommon memory remappedInputs = inputs;
+            remappedInputs.paymentAmount = paymentAmount;
+            remappedInputs.tokenId = tokenId;
+
+            addErc721OfferItem(remappedInputs.tokenId);
+            addEthConsiderationItem(alice, remappedInputs.paymentAmount);
+
+            AdditionalRecipient[]
             storage _additionalRecipients = additionalRecipients;
 
-        _additionalRecipients.push(
+            _additionalRecipients.push(
                 AdditionalRecipient({
                     recipient: cal,
-                    amount: inputs.paymentAmount
+                    amount: marketplaceFee
                 })
             );
-            addEthConsiderationItem(cal, inputs.paymentAmount);
+            addEthConsiderationItem(cal, marketplaceFee);
 
-        _configureBasicOrderParametersEthTo721(inputs);
-        basicOrderParameters.additionalRecipients = _additionalRecipients;
-        basicOrderParameters.considerationAmount = 1;
-        basicOrderParameters
-            .totalOriginalAdditionalRecipients = finalAdditionalRecipients;
-        basicOrderParameters.fulfillerConduitKey = inputs.useConduit
-            ? conduitKeyOne
-            : bytes32(0);
+            _configureBasicOrderParametersEthTo721(remappedInputs);
+            basicOrderParameters.additionalRecipients = _additionalRecipients;
+            basicOrderParameters.considerationAmount = remappedInputs.paymentAmount;
+            basicOrderParameters.totalOriginalAdditionalRecipients = 1;
+            basicOrderParameters.fulfillerConduitKey = inputs.useConduit ? conduitKeyOne : bytes32(0);
 
-        test721_1.mint(alice, inputs.tokenId);
+            test721_1.mint(alice, remappedInputs.tokenId);
 
-        configureOrderComponents(
-            inputs.zone,
-            inputs.zoneHash,
-            inputs.salt,
-            inputs.useConduit ? conduitKeyOne : bytes32(0)
-        );
-        uint256 counter = seaport.getCounter(alice);
-        baseOrderComponents.counter = counter;
+            configureOrderComponents(
+            remappedInputs.zone,
+            remappedInputs.zoneHash,
+            remappedInputs.salt,
+            remappedInputs.useConduit ? conduitKeyOne : bytes32(0)
+            );
+            uint256 counter = seaport.getCounter(alice);
+            baseOrderComponents.counter = counter;
+    
+            bytes32 orderHash = seaport.getOrderHash(
+                baseOrderComponents
+            );
 
-        bytes32 orderHash = seaport.getOrderHash(
-            baseOrderComponents
-        );
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            orderHash
-        );
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                orderHash
+            );
+    
+            basicOrderParameters.signature = signature;
 
-        basicOrderParameters.signature = signature;
+            vm.prank(bob);
+            seaport.fulfillBasicOrder{value: (remappedInputs.paymentAmount + marketplaceFee)}(basicOrderParameters);
 
-        vm.prank(bob);
-        seaport.fulfillBasicOrder{
-            value: inputs.paymentAmount.mul(10000000)
-        }(basicOrderParameters);
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete additionalRecipients;
+        }
+    }
+
+    function test_benchmarkBuySingleListingMarketplaceFeesUseConduit(FuzzInputsCommon memory inputs) public {
+        vm.assume(inputs.useConduit == true);
+
+        uint128 paymentAmount = 95 ether;
+        uint128 marketplaceFee = 5 ether;
+
+        for (uint256 tokenId = 1; tokenId <= 100; tokenId++) {
+            FuzzInputsCommon memory remappedInputs = inputs;
+            remappedInputs.paymentAmount = paymentAmount;
+            remappedInputs.tokenId = tokenId;
+
+            addErc721OfferItem(remappedInputs.tokenId);
+            addEthConsiderationItem(alice, remappedInputs.paymentAmount);
+
+            AdditionalRecipient[]
+            storage _additionalRecipients = additionalRecipients;
+
+            _additionalRecipients.push(
+                AdditionalRecipient({
+                    recipient: cal,
+                    amount: marketplaceFee
+                })
+            );
+            addEthConsiderationItem(cal, marketplaceFee);
+
+            _configureBasicOrderParametersEthTo721(remappedInputs);
+            basicOrderParameters.additionalRecipients = _additionalRecipients;
+            basicOrderParameters.considerationAmount = remappedInputs.paymentAmount;
+            basicOrderParameters.totalOriginalAdditionalRecipients = 1;
+            basicOrderParameters.fulfillerConduitKey = inputs.useConduit ? conduitKeyOne : bytes32(0);
+
+            test721_1.mint(alice, remappedInputs.tokenId);
+
+            configureOrderComponents(
+            remappedInputs.zone,
+            remappedInputs.zoneHash,
+            remappedInputs.salt,
+            remappedInputs.useConduit ? conduitKeyOne : bytes32(0)
+            );
+            uint256 counter = seaport.getCounter(alice);
+            baseOrderComponents.counter = counter;
+    
+            bytes32 orderHash = seaport.getOrderHash(
+                baseOrderComponents
+            );
+
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                orderHash
+            );
+    
+            basicOrderParameters.signature = signature;
+
+            vm.prank(bob);
+            seaport.fulfillBasicOrder{value: (remappedInputs.paymentAmount + marketplaceFee)}(basicOrderParameters);
+
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete additionalRecipients;
+        }
+    }
+
+    function test_benchmarkBuySingleListingMarketplaceAndRoyaltyFeesNoConduit(FuzzInputsCommon memory inputs) public {
+        vm.assume(inputs.useConduit == false);
+
+        uint128 paymentAmount = 85 ether;
+        uint128 marketplaceFee = 5 ether;
+        uint128 royaltyFee = 10 ether;
+
+        for (uint256 tokenId = 1; tokenId <= 100; tokenId++) {
+            FuzzInputsCommon memory remappedInputs = inputs;
+            remappedInputs.paymentAmount = paymentAmount;
+            remappedInputs.tokenId = tokenId;
+
+            addErc721OfferItem(remappedInputs.tokenId);
+            addEthConsiderationItem(alice, remappedInputs.paymentAmount);
+
+            AdditionalRecipient[]
+            storage _additionalRecipients = additionalRecipients;
+
+            _additionalRecipients.push(
+                AdditionalRecipient({
+                    recipient: cal,
+                    amount: marketplaceFee
+                })
+            );
+            addEthConsiderationItem(cal, marketplaceFee);
+
+            _additionalRecipients.push(
+                AdditionalRecipient({
+                    recipient: abe,
+                    amount: royaltyFee
+                })
+            );
+            addEthConsiderationItem(abe, royaltyFee);
+
+            _configureBasicOrderParametersEthTo721(remappedInputs);
+            basicOrderParameters.additionalRecipients = _additionalRecipients;
+            basicOrderParameters.considerationAmount = remappedInputs.paymentAmount;
+            basicOrderParameters.totalOriginalAdditionalRecipients = 2;
+            basicOrderParameters.fulfillerConduitKey = inputs.useConduit ? conduitKeyOne : bytes32(0);
+
+            test721_1.mint(alice, remappedInputs.tokenId);
+
+            configureOrderComponents(
+            remappedInputs.zone,
+            remappedInputs.zoneHash,
+            remappedInputs.salt,
+            remappedInputs.useConduit ? conduitKeyOne : bytes32(0)
+            );
+            uint256 counter = seaport.getCounter(alice);
+            baseOrderComponents.counter = counter;
+    
+            bytes32 orderHash = seaport.getOrderHash(
+                baseOrderComponents
+            );
+
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                orderHash
+            );
+    
+            basicOrderParameters.signature = signature;
+
+            vm.prank(bob);
+            seaport.fulfillBasicOrder{value: (remappedInputs.paymentAmount + marketplaceFee + royaltyFee)}(basicOrderParameters);
+
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete additionalRecipients;
+        }
     }
 
     // Basic Eth to 721 with two additional recipients
-    function test_benchmarkBuySingleListingMarketplaceAndRoyaltyFees(
-        FuzzInputsCommon memory inputs) public {
-        vm.assume(inputs.paymentAmount > 0);
-        vm.assume(inputs.useConduit == false);
-        vm.assume(inputs.paymentAmount < 10);
-        uint256 finalAdditionalRecipients = 2;
+    function test_benchmarkBuySingleListingMarketplaceAndRoyaltyFeesUseConduit(FuzzInputsCommon memory inputs) public {
+        vm.assume(inputs.useConduit == true);
 
-        addErc721OfferItem(inputs.tokenId);
-        addEthConsiderationItem(alice, 1);
+        uint128 paymentAmount = 85 ether;
+        uint128 marketplaceFee = 5 ether;
+        uint128 royaltyFee = 10 ether;
 
-        AdditionalRecipient[]
+        for (uint256 tokenId = 1; tokenId <= 100; tokenId++) {
+            FuzzInputsCommon memory remappedInputs = inputs;
+            remappedInputs.paymentAmount = paymentAmount;
+            remappedInputs.tokenId = tokenId;
+
+            addErc721OfferItem(remappedInputs.tokenId);
+            addEthConsiderationItem(alice, remappedInputs.paymentAmount);
+
+            AdditionalRecipient[]
             storage _additionalRecipients = additionalRecipients;
 
-        _additionalRecipients.push(
+            _additionalRecipients.push(
                 AdditionalRecipient({
                     recipient: cal,
-                    amount: inputs.paymentAmount
+                    amount: marketplaceFee
                 })
             );
-        addEthConsiderationItem(cal, inputs.paymentAmount);
+            addEthConsiderationItem(cal, marketplaceFee);
 
-        _additionalRecipients.push(
+            _additionalRecipients.push(
                 AdditionalRecipient({
                     recipient: abe,
-                    amount: inputs.paymentAmount
+                    amount: royaltyFee
                 })
             );
-        addEthConsiderationItem(abe, inputs.paymentAmount);
-        
-        _configureBasicOrderParametersEthTo721(inputs);
-        basicOrderParameters.additionalRecipients = _additionalRecipients;
-        basicOrderParameters.considerationAmount = 1;
-        basicOrderParameters
-            .totalOriginalAdditionalRecipients = finalAdditionalRecipients;
-        basicOrderParameters.fulfillerConduitKey = inputs.useConduit
-            ? conduitKeyOne
-            : bytes32(0);
+            addEthConsiderationItem(abe, royaltyFee);
 
-        test721_1.mint(alice, inputs.tokenId);
+            _configureBasicOrderParametersEthTo721(remappedInputs);
+            basicOrderParameters.additionalRecipients = _additionalRecipients;
+            basicOrderParameters.considerationAmount = remappedInputs.paymentAmount;
+            basicOrderParameters.totalOriginalAdditionalRecipients = 2;
+            basicOrderParameters.fulfillerConduitKey = inputs.useConduit ? conduitKeyOne : bytes32(0);
 
-        configureOrderComponents(
-            inputs.zone,
-            inputs.zoneHash,
-            inputs.salt,
-            inputs.useConduit ? conduitKeyOne : bytes32(0)
-        );
-        uint256 counter = seaport.getCounter(alice);
-        baseOrderComponents.counter = counter;
+            test721_1.mint(alice, remappedInputs.tokenId);
 
-        bytes32 orderHash = seaport.getOrderHash(
-            baseOrderComponents
-        );
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            orderHash
-        );
+            configureOrderComponents(
+            remappedInputs.zone,
+            remappedInputs.zoneHash,
+            remappedInputs.salt,
+            remappedInputs.useConduit ? conduitKeyOne : bytes32(0)
+            );
+            uint256 counter = seaport.getCounter(alice);
+            baseOrderComponents.counter = counter;
+    
+            bytes32 orderHash = seaport.getOrderHash(
+                baseOrderComponents
+            );
 
-        basicOrderParameters.signature = signature;
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                orderHash
+            );
+    
+            basicOrderParameters.signature = signature;
 
-        vm.prank(bob);
-        seaport.fulfillBasicOrder{
-            value: inputs.paymentAmount.mul(10000000)
-        }(basicOrderParameters);
+            vm.prank(bob);
+            seaport.fulfillBasicOrder{value: (remappedInputs.paymentAmount + marketplaceFee + royaltyFee)}(basicOrderParameters);
+
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete additionalRecipients;
+        }
     }
 
     // Bundled Listing No Fees, Native Eth Payment, No Conduit
@@ -300,70 +513,81 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
             : bytes32(0);
 
         uint256 paymentAmount = 100 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 100;
+        uint256 tokenId = 0;
 
-        for (uint256 tokenId = 0; tokenId < numItemsInBundle; tokenId++) {
-            test721_1.mint(alice, tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
-                    1,
-                    1
-                )
+            for (uint256 item = 0; item < numItemsInBundle; item++) {
+                tokenId++;
+                test721_1.mint(alice, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        paymentAmount,
+                        paymentAmount,
+                        payable(alice)
+                    )
+                );
+                sumPayments += paymentAmount;
+            }
+    
+            OrderComponents memory orderComponents = OrderComponents(
+                alice,
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                seaport.getCounter(alice)
             );
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    paymentAmount,
-                    paymentAmount,
-                    payable(alice)
-                )
+    
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                seaport.getOrderHash(orderComponents)
             );
-            sumPayments += paymentAmount;
+    
+            OrderParameters memory orderParameters = OrderParameters(
+                address(alice),
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                considerationItems.length
+            );
+    
+            vm.prank(bob);
+            seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
+
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
         }
-
-        OrderComponents memory orderComponents = OrderComponents(
-            alice,
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            seaport.getCounter(alice)
-        );
-
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            seaport.getOrderHash(orderComponents)
-        );
-
-        OrderParameters memory orderParameters = OrderParameters(
-            address(alice),
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            considerationItems.length
-        );
-
-        vm.prank(bob);
-        seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
     }
 
     // Bundled Listing No Fees, Native Eth Payment, Use Conduit
@@ -375,70 +599,81 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
             : bytes32(0);
 
         uint256 paymentAmount = 100 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 100;
+        uint256 tokenId = 0;
 
-        for (uint256 tokenId = 0; tokenId < numItemsInBundle; tokenId++) {
-            test721_1.mint(alice, tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
-                    1,
-                    1
-                )
+            for (uint256 item = 0; item < numItemsInBundle; item++) {
+                tokenId++;
+                test721_1.mint(alice, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        paymentAmount,
+                        paymentAmount,
+                        payable(alice)
+                    )
+                );
+                sumPayments += paymentAmount;
+            }
+    
+            OrderComponents memory orderComponents = OrderComponents(
+                alice,
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                seaport.getCounter(alice)
             );
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    paymentAmount,
-                    paymentAmount,
-                    payable(alice)
-                )
+    
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                seaport.getOrderHash(orderComponents)
             );
-            sumPayments += paymentAmount;
+    
+            OrderParameters memory orderParameters = OrderParameters(
+                address(alice),
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                considerationItems.length
+            );
+    
+            vm.prank(bob);
+            seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
+
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
         }
-
-        OrderComponents memory orderComponents = OrderComponents(
-            alice,
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            seaport.getCounter(alice)
-        );
-
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            seaport.getOrderHash(orderComponents)
-        );
-
-        OrderParameters memory orderParameters = OrderParameters(
-            address(alice),
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            considerationItems.length
-        );
-
-        vm.prank(bob);
-        seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
     }
 
     // Bundled Listing, 1 Fee Receiver, Native Eth Payment, No Conduit
@@ -451,82 +686,93 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
 
         uint256 alicePaymentAmount = 95 ether;
         uint256 calPaymentAmount = 5 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 100;
+        uint256 tokenId = 0;
 
-        for (uint256 tokenId = 0; tokenId < numItemsInBundle; tokenId++) {
-            test721_1.mint(alice, tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
-                    1,
-                    1
-                )
+            for (uint256 item = 0; item < numItemsInBundle; item++) {
+                tokenId++;
+                test721_1.mint(alice, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        alicePaymentAmount,
+                        alicePaymentAmount,
+                        payable(alice)
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        calPaymentAmount,
+                        calPaymentAmount,
+                        payable(cal)
+                    )
+                );
+    
+                sumPayments += (alicePaymentAmount + calPaymentAmount);
+            }
+    
+            OrderComponents memory orderComponents = OrderComponents(
+                alice,
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                seaport.getCounter(alice)
             );
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    alicePaymentAmount,
-                    alicePaymentAmount,
-                    payable(alice)
-                )
+    
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                seaport.getOrderHash(orderComponents)
             );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    calPaymentAmount,
-                    calPaymentAmount,
-                    payable(cal)
-                )
+    
+            OrderParameters memory orderParameters = OrderParameters(
+                address(alice),
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                considerationItems.length
             );
+    
+            vm.prank(bob);
+            seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
 
-            sumPayments += (alicePaymentAmount + calPaymentAmount);
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
         }
-
-        OrderComponents memory orderComponents = OrderComponents(
-            alice,
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            seaport.getCounter(alice)
-        );
-
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            seaport.getOrderHash(orderComponents)
-        );
-
-        OrderParameters memory orderParameters = OrderParameters(
-            address(alice),
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            considerationItems.length
-        );
-
-        vm.prank(bob);
-        seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
     }
 
     // Bundled Listing, 1 Fee Receiver, Native Eth Payment, Use Conduit
@@ -539,82 +785,93 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
 
         uint256 alicePaymentAmount = 95 ether;
         uint256 calPaymentAmount = 5 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 100;
+        uint256 tokenId = 0;
 
-        for (uint256 tokenId = 0; tokenId < numItemsInBundle; tokenId++) {
-            test721_1.mint(alice, tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
-                    1,
-                    1
-                )
+            for (uint256 item = 0; item < numItemsInBundle; item++) {
+                tokenId++;
+                test721_1.mint(alice, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        alicePaymentAmount,
+                        alicePaymentAmount,
+                        payable(alice)
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        calPaymentAmount,
+                        calPaymentAmount,
+                        payable(cal)
+                    )
+                );
+    
+                sumPayments += (alicePaymentAmount + calPaymentAmount);
+            }
+    
+            OrderComponents memory orderComponents = OrderComponents(
+                alice,
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                seaport.getCounter(alice)
             );
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    alicePaymentAmount,
-                    alicePaymentAmount,
-                    payable(alice)
-                )
+    
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                seaport.getOrderHash(orderComponents)
             );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    calPaymentAmount,
-                    calPaymentAmount,
-                    payable(cal)
-                )
+    
+            OrderParameters memory orderParameters = OrderParameters(
+                address(alice),
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                considerationItems.length
             );
+    
+            vm.prank(bob);
+            seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
 
-            sumPayments += (alicePaymentAmount + calPaymentAmount);
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
         }
-
-        OrderComponents memory orderComponents = OrderComponents(
-            alice,
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            seaport.getCounter(alice)
-        );
-
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            seaport.getOrderHash(orderComponents)
-        );
-
-        OrderParameters memory orderParameters = OrderParameters(
-            address(alice),
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            considerationItems.length
-        );
-
-        vm.prank(bob);
-        seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
     }
 
     // Bundled Listing, 2 Fee Receivers, Native Eth Payment, No Conduit
@@ -628,93 +885,104 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
         uint256 alicePaymentAmount = 85 ether;
         uint256 calPaymentAmount = 5 ether;
         uint256 abePaymentAmount = 10 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 100;
+        uint256 tokenId = 0;
 
-        for (uint256 tokenId = 0; tokenId < numItemsInBundle; tokenId++) {
-            test721_1.mint(alice, tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
-                    1,
-                    1
-                )
+            for (uint256 item = 0; item < numItemsInBundle; item++) {
+                tokenId++;
+                test721_1.mint(alice, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        alicePaymentAmount,
+                        alicePaymentAmount,
+                        payable(alice)
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        calPaymentAmount,
+                        calPaymentAmount,
+                        payable(cal)
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        abePaymentAmount,
+                        abePaymentAmount,
+                        payable(abe)
+                    )
+                );
+    
+                sumPayments += (alicePaymentAmount + calPaymentAmount + abePaymentAmount);
+            }
+    
+            OrderComponents memory orderComponents = OrderComponents(
+                alice,
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                seaport.getCounter(alice)
             );
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    alicePaymentAmount,
-                    alicePaymentAmount,
-                    payable(alice)
-                )
+    
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                seaport.getOrderHash(orderComponents)
             );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    calPaymentAmount,
-                    calPaymentAmount,
-                    payable(cal)
-                )
+    
+            OrderParameters memory orderParameters = OrderParameters(
+                address(alice),
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                considerationItems.length
             );
+    
+            vm.prank(bob);
+            seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
 
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    abePaymentAmount,
-                    abePaymentAmount,
-                    payable(abe)
-                )
-            );
-
-            sumPayments += (alicePaymentAmount + calPaymentAmount + abePaymentAmount);
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
         }
-
-        OrderComponents memory orderComponents = OrderComponents(
-            alice,
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            seaport.getCounter(alice)
-        );
-
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            seaport.getOrderHash(orderComponents)
-        );
-
-        OrderParameters memory orderParameters = OrderParameters(
-            address(alice),
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            considerationItems.length
-        );
-
-        vm.prank(bob);
-        seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
     }
 
     // Bundled Listing, 2 Fee Receivers, Native Eth Payment, Use Conduit
@@ -728,93 +996,104 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
         uint256 alicePaymentAmount = 85 ether;
         uint256 calPaymentAmount = 5 ether;
         uint256 abePaymentAmount = 10 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 100;
+        uint256 tokenId = 0;
 
-        for (uint256 tokenId = 0; tokenId < numItemsInBundle; tokenId++) {
-            test721_1.mint(alice, tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
-                    1,
-                    1
-                )
+            for (uint256 item = 0; item < numItemsInBundle; item++) {
+                tokenId++;
+                test721_1.mint(alice, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        alicePaymentAmount,
+                        alicePaymentAmount,
+                        payable(alice)
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        calPaymentAmount,
+                        calPaymentAmount,
+                        payable(cal)
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        abePaymentAmount,
+                        abePaymentAmount,
+                        payable(abe)
+                    )
+                );
+    
+                sumPayments += (alicePaymentAmount + calPaymentAmount + abePaymentAmount);
+            }
+    
+            OrderComponents memory orderComponents = OrderComponents(
+                alice,
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                seaport.getCounter(alice)
             );
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    alicePaymentAmount,
-                    alicePaymentAmount,
-                    payable(alice)
-                )
+    
+            bytes memory signature = signOrder(
+                seaport,
+                alicePk,
+                seaport.getOrderHash(orderComponents)
             );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    calPaymentAmount,
-                    calPaymentAmount,
-                    payable(cal)
-                )
+    
+            OrderParameters memory orderParameters = OrderParameters(
+                address(alice),
+                inputs.zone,
+                offerItems,
+                considerationItems,
+                OrderType.FULL_OPEN,
+                block.timestamp,
+                block.timestamp + 1,
+                inputs.zoneHash,
+                inputs.salt,
+                conduitKey,
+                considerationItems.length
             );
+    
+            vm.prank(bob);
+            seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
 
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    abePaymentAmount,
-                    abePaymentAmount,
-                    payable(abe)
-                )
-            );
-
-            sumPayments += (alicePaymentAmount + calPaymentAmount + abePaymentAmount);
+            delete offerItems;
+            delete considerationItems;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
         }
-
-        OrderComponents memory orderComponents = OrderComponents(
-            alice,
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            seaport.getCounter(alice)
-        );
-
-        bytes memory signature = signOrder(
-            seaport,
-            alicePk,
-            seaport.getOrderHash(orderComponents)
-        );
-
-        OrderParameters memory orderParameters = OrderParameters(
-            address(alice),
-            inputs.zone,
-            offerItems,
-            considerationItems,
-            OrderType.FULL_OPEN,
-            block.timestamp,
-            block.timestamp + 1,
-            inputs.zoneHash,
-            inputs.salt,
-            conduitKey,
-            considerationItems.length
-        );
-
-        vm.prank(bob);
-        seaport.fulfillOrder{value: sumPayments}(Order(orderParameters, signature), conduitKey);
     }
 
     function test_benchmarkSweepCollectionNoFeesNoConduit(FuzzInputsCommonFulfillOrder memory inputs) public {
@@ -825,115 +1104,124 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
             : bytes32(0);
 
         uint256 paymentAmount = 100 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 50;
+        uint256 tokenId = 0;
 
-        address payable[] memory fakeAddresses = new address payable[](numItemsInBundle);
-        uint256[] memory fakeAddressPks = new uint256[](numItemsInBundle);
         for (uint256 i = 0; i < numItemsInBundle; i++) {
-            fakeAddressPks[i] = 1000000 + i;
-            fakeAddresses[i] = payable(vm.addr(fakeAddressPks[i]));
-            vm.prank(fakeAddresses[i]);
-            test721_1.setApprovalForAll(address(seaport), true);
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
+
+                vm.startPrank(fakeAddress);
+                test721_1.setApprovalForAll(address(seaport), true);
+                test721_1.setApprovalForAll(address(conduit), true);
+                vm.stopPrank();
         }
 
-        bytes[] memory signatures = new bytes[](numItemsInBundle);
-        AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
-        for (uint256 i = 0; i < numItemsInBundle; i++) {
-            uint256 tokenId = i;
-            test721_1.mint(fakeAddresses[i], tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
+   
+            AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
+            for (uint256 i = 0; i < numItemsInBundle; i++) {
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
+                tokenId++;
+                test721_1.mint(fakeAddress, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        paymentAmount,
+                        paymentAmount,
+                        payable(fakeAddress)
+                    )
+                );
+    
+                OrderComponents memory orderComponents = OrderComponents(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    seaport.getCounter(alice)
+                );
+       
+                OrderParameters memory orderParameters = OrderParameters(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    considerationItems.length
+                );
+    
+                advancedOrders[i] = AdvancedOrder(
+                    orderParameters,
                     1,
-                    1
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    paymentAmount,
-                    paymentAmount,
-                    payable(fakeAddresses[i])
-                )
-            );
-
-            OrderComponents memory orderComponents = OrderComponents(
-                fakeAddresses[i],
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
+                    1,
+                    signOrder(
+                        seaport,
+                        fakeAddressPk,
+                        seaport.getOrderHash(orderComponents)
+                    ),
+                    "0x"
+                );
+    
+                sumPayments += paymentAmount;
+    
+                delete offerItems;
+                delete considerationItems;
+    
+                offerComponents.push(FulfillmentComponent(i, 0));
+                offerComponentsArray.push(offerComponents);
+                delete offerComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 0));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+            }
+      
+            vm.prank(bob, bob);
+            seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
+                advancedOrders,
+                new CriteriaResolver[](0),
+                offerComponentsArray,
+                considerationComponentsArray,
                 conduitKey,
-                seaport.getCounter(alice)
+                address(0),
+                100
             );
-
-            signatures[i] = signOrder(
-                seaport,
-                fakeAddressPks[i],
-                seaport.getOrderHash(orderComponents)
-            );
-
-            OrderParameters memory orderParameters = OrderParameters(
-                fakeAddresses[i],
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
-                conduitKey,
-                considerationItems.length
-            );
-
-            advancedOrders[i] = AdvancedOrder(
-                orderParameters,
-                1,
-                1,
-                signatures[i],
-                "0x"
-            );
-
-            sumPayments += paymentAmount;
 
             delete offerItems;
             delete considerationItems;
-
-            //offerComponents.push(FulfillmentComponent(0, tokenId));
-            offerComponents.push(FulfillmentComponent(i, 0));
-            offerComponentsArray.push(offerComponents);
-            delete offerComponents;
-
-            //considerationComponents.push(FulfillmentComponent(0, tokenId));
-            considerationComponents.push(FulfillmentComponent(i, 0));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete offerComponentsArray;
+            delete considerationComponentsArray;
         }
-
-        CriteriaResolver[] memory criteriaResolvers;
-
-        vm.prank(bob, bob);
-        seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
-            advancedOrders,
-            criteriaResolvers,
-            offerComponentsArray,
-            considerationComponentsArray,
-            conduitKey,
-            address(0),
-            100
-        );
     }
 
     function test_benchmarkSweepCollectionNoFeesUseConduit(FuzzInputsCommonFulfillOrder memory inputs) public {
@@ -944,115 +1232,124 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
             : bytes32(0);
 
         uint256 paymentAmount = 100 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 50;
+        uint256 tokenId = 0;
 
-        address payable[] memory fakeAddresses = new address payable[](numItemsInBundle);
-        uint256[] memory fakeAddressPks = new uint256[](numItemsInBundle);
         for (uint256 i = 0; i < numItemsInBundle; i++) {
-            fakeAddressPks[i] = 1000000 + i;
-            fakeAddresses[i] = payable(vm.addr(fakeAddressPks[i]));
-            vm.startPrank(fakeAddresses[i]);
-            test721_1.setApprovalForAll(address(seaport), true);
-            test721_1.setApprovalForAll(address(conduit), true);
-            vm.stopPrank();
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
+
+                vm.startPrank(fakeAddress);
+                test721_1.setApprovalForAll(address(seaport), true);
+                test721_1.setApprovalForAll(address(conduit), true);
+                vm.stopPrank();
         }
 
-        bytes[] memory signatures = new bytes[](numItemsInBundle);
-        AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
-        for (uint256 i = 0; i < numItemsInBundle; i++) {
-            uint256 tokenId = i;
-            test721_1.mint(fakeAddresses[i], tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
+   
+            AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
+            for (uint256 i = 0; i < numItemsInBundle; i++) {
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
+                tokenId++;
+                test721_1.mint(fakeAddress, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        paymentAmount,
+                        paymentAmount,
+                        payable(fakeAddress)
+                    )
+                );
+    
+                OrderComponents memory orderComponents = OrderComponents(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    seaport.getCounter(alice)
+                );
+       
+                OrderParameters memory orderParameters = OrderParameters(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    considerationItems.length
+                );
+    
+                advancedOrders[i] = AdvancedOrder(
+                    orderParameters,
                     1,
-                    1
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    paymentAmount,
-                    paymentAmount,
-                    payable(fakeAddresses[i])
-                )
-            );
-
-            OrderComponents memory orderComponents = OrderComponents(
-                fakeAddresses[i],
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
+                    1,
+                    signOrder(
+                        seaport,
+                        fakeAddressPk,
+                        seaport.getOrderHash(orderComponents)
+                    ),
+                    "0x"
+                );
+    
+                sumPayments += paymentAmount;
+    
+                delete offerItems;
+                delete considerationItems;
+    
+                offerComponents.push(FulfillmentComponent(i, 0));
+                offerComponentsArray.push(offerComponents);
+                delete offerComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 0));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+            }
+      
+            vm.prank(bob, bob);
+            seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
+                advancedOrders,
+                new CriteriaResolver[](0),
+                offerComponentsArray,
+                considerationComponentsArray,
                 conduitKey,
-                seaport.getCounter(alice)
+                address(0),
+                100
             );
-
-            signatures[i] = signOrder(
-                seaport,
-                fakeAddressPks[i],
-                seaport.getOrderHash(orderComponents)
-            );
-
-            OrderParameters memory orderParameters = OrderParameters(
-                fakeAddresses[i],
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
-                conduitKey,
-                considerationItems.length
-            );
-
-            advancedOrders[i] = AdvancedOrder(
-                orderParameters,
-                1,
-                1,
-                signatures[i],
-                "0x"
-            );
-
-            sumPayments += paymentAmount;
 
             delete offerItems;
             delete considerationItems;
-
-            offerComponents.push(FulfillmentComponent(i, 0));
-            offerComponentsArray.push(offerComponents);
-            delete offerComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 0));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete offerComponentsArray;
+            delete considerationComponentsArray;
         }
-
-        CriteriaResolver[] memory criteriaResolvers;
-
-        vm.prank(bob, bob);
-        seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
-            advancedOrders,
-            criteriaResolvers,
-            offerComponentsArray,
-            considerationComponentsArray,
-            conduitKey,
-            address(0),
-            100
-        );
     }
 
     function test_benchmarkSweepCollectionMarketplaceFeesNoConduit(FuzzInputsCommonFulfillOrder memory inputs) public {
@@ -1062,129 +1359,139 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
             ? conduitKeyOne
             : bytes32(0);
 
-        uint256 sellerPaymentAmount = 95 ether;
-        uint256 calPaymentAmount = 5 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 50;
+        uint256 tokenId = 0;
 
-        address payable[] memory fakeAddresses = new address payable[](numItemsInBundle);
-        uint256[] memory fakeAddressPks = new uint256[](numItemsInBundle);
         for (uint256 i = 0; i < numItemsInBundle; i++) {
-            fakeAddressPks[i] = 1000000 + i;
-            fakeAddresses[i] = payable(vm.addr(fakeAddressPks[i]));
-            vm.startPrank(fakeAddresses[i]);
-            test721_1.setApprovalForAll(address(seaport), true);
-            test721_1.setApprovalForAll(address(conduit), true);
-            vm.stopPrank();
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
+
+                vm.startPrank(fakeAddress);
+                test721_1.setApprovalForAll(address(seaport), true);
+                test721_1.setApprovalForAll(address(conduit), true);
+                vm.stopPrank();
         }
 
-        AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
-        for (uint256 i = 0; i < numItemsInBundle; i++) {
-            uint256 tokenId = i;
-            test721_1.mint(fakeAddresses[i], tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
+   
+            AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
+            for (uint256 i = 0; i < numItemsInBundle; i++) {
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
+                tokenId++;
+                test721_1.mint(fakeAddress, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        95 ether,
+                        95 ether,
+                        payable(fakeAddress)
+                    )
+                );
+
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        5 ether,
+                        5 ether,
+                        payable(cal)
+                    )
+                );
+    
+                OrderComponents memory orderComponents = OrderComponents(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    seaport.getCounter(alice)
+                );
+       
+                OrderParameters memory orderParameters = OrderParameters(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    considerationItems.length
+                );
+    
+                advancedOrders[i] = AdvancedOrder(
+                    orderParameters,
                     1,
-                    1
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    sellerPaymentAmount,
-                    sellerPaymentAmount,
-                    payable(fakeAddresses[i])
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    calPaymentAmount,
-                    calPaymentAmount,
-                    payable(cal)
-                )
-            );
-
-            OrderComponents memory orderComponents = OrderComponents(
-                fakeAddresses[i],
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
+                    1,
+                    signOrder(
+                        seaport,
+                        fakeAddressPk,
+                        seaport.getOrderHash(orderComponents)
+                    ),
+                    "0x"
+                );
+    
+                sumPayments += 100 ether;
+    
+                delete offerItems;
+                delete considerationItems;
+    
+                offerComponents.push(FulfillmentComponent(i, 0));
+                offerComponentsArray.push(offerComponents);
+                delete offerComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 0));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 1));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+            }
+      
+            vm.prank(bob, bob);
+            seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
+                advancedOrders,
+                new CriteriaResolver[](0),
+                offerComponentsArray,
+                considerationComponentsArray,
                 conduitKey,
-                seaport.getCounter(alice)
+                address(0),
+                100
             );
-
-            OrderParameters memory orderParameters = OrderParameters(
-                fakeAddresses[i],
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
-                conduitKey,
-                considerationItems.length
-            );
-
-            advancedOrders[i] = AdvancedOrder(
-                orderParameters,
-                1,
-                1,
-                signOrder(
-                    seaport,
-                    fakeAddressPks[i],
-                    seaport.getOrderHash(orderComponents)
-                ),
-                "0x"
-            );
-
-            sumPayments += (sellerPaymentAmount + calPaymentAmount);
 
             delete offerItems;
             delete considerationItems;
-
-            offerComponents.push(FulfillmentComponent(i, 0));
-            offerComponentsArray.push(offerComponents);
-            delete offerComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 0));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 1));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete offerComponentsArray;
+            delete considerationComponentsArray;
         }
-
-        CriteriaResolver[] memory criteriaResolvers;
-
-        vm.prank(bob, bob);
-        seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
-            advancedOrders,
-            criteriaResolvers,
-            offerComponentsArray,
-            considerationComponentsArray,
-            conduitKey,
-            address(0),
-            100
-        );
     }
 
     function test_benchmarkSweepCollectionMarketplaceFeesUseConduit(FuzzInputsCommonFulfillOrder memory inputs) public {
@@ -1194,129 +1501,139 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
             ? conduitKeyOne
             : bytes32(0);
 
-        uint256 sellerPaymentAmount = 95 ether;
-        uint256 calPaymentAmount = 5 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 50;
+        uint256 tokenId = 0;
 
-        address payable[] memory fakeAddresses = new address payable[](numItemsInBundle);
-        uint256[] memory fakeAddressPks = new uint256[](numItemsInBundle);
         for (uint256 i = 0; i < numItemsInBundle; i++) {
-            fakeAddressPks[i] = 1000000 + i;
-            fakeAddresses[i] = payable(vm.addr(fakeAddressPks[i]));
-            vm.startPrank(fakeAddresses[i]);
-            test721_1.setApprovalForAll(address(seaport), true);
-            test721_1.setApprovalForAll(address(conduit), true);
-            vm.stopPrank();
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
+
+                vm.startPrank(fakeAddress);
+                test721_1.setApprovalForAll(address(seaport), true);
+                test721_1.setApprovalForAll(address(conduit), true);
+                vm.stopPrank();
         }
 
-        AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
-        for (uint256 i = 0; i < numItemsInBundle; i++) {
-            uint256 tokenId = i;
-            test721_1.mint(fakeAddresses[i], tokenId);
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
+   
+            AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
+            for (uint256 i = 0; i < numItemsInBundle; i++) {
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
+                tokenId++;
+                test721_1.mint(fakeAddress, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        95 ether,
+                        95 ether,
+                        payable(fakeAddress)
+                    )
+                );
+
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        5 ether,
+                        5 ether,
+                        payable(cal)
+                    )
+                );
+    
+                OrderComponents memory orderComponents = OrderComponents(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    seaport.getCounter(alice)
+                );
+       
+                OrderParameters memory orderParameters = OrderParameters(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    considerationItems.length
+                );
+    
+                advancedOrders[i] = AdvancedOrder(
+                    orderParameters,
                     1,
-                    1
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    sellerPaymentAmount,
-                    sellerPaymentAmount,
-                    payable(fakeAddresses[i])
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    calPaymentAmount,
-                    calPaymentAmount,
-                    payable(cal)
-                )
-            );
-
-            OrderComponents memory orderComponents = OrderComponents(
-                fakeAddresses[i],
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
+                    1,
+                    signOrder(
+                        seaport,
+                        fakeAddressPk,
+                        seaport.getOrderHash(orderComponents)
+                    ),
+                    "0x"
+                );
+    
+                sumPayments += 100 ether;
+    
+                delete offerItems;
+                delete considerationItems;
+    
+                offerComponents.push(FulfillmentComponent(i, 0));
+                offerComponentsArray.push(offerComponents);
+                delete offerComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 0));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 1));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+            }
+      
+            vm.prank(bob, bob);
+            seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
+                advancedOrders,
+                new CriteriaResolver[](0),
+                offerComponentsArray,
+                considerationComponentsArray,
                 conduitKey,
-                seaport.getCounter(alice)
+                address(0),
+                100
             );
-
-            OrderParameters memory orderParameters = OrderParameters(
-                fakeAddresses[i],
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
-                conduitKey,
-                considerationItems.length
-            );
-
-            advancedOrders[i] = AdvancedOrder(
-                orderParameters,
-                1,
-                1,
-                signOrder(
-                    seaport,
-                    fakeAddressPks[i],
-                    seaport.getOrderHash(orderComponents)
-                ),
-                "0x"
-            );
-
-            sumPayments += (sellerPaymentAmount + calPaymentAmount);
 
             delete offerItems;
             delete considerationItems;
-
-            offerComponents.push(FulfillmentComponent(i, 0));
-            offerComponentsArray.push(offerComponents);
-            delete offerComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 0));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 1));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete offerComponentsArray;
+            delete considerationComponentsArray;
         }
-
-        CriteriaResolver[] memory criteriaResolvers;
-
-        vm.prank(bob, bob);
-        seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
-            advancedOrders,
-            criteriaResolvers,
-            offerComponentsArray,
-            considerationComponentsArray,
-            conduitKey,
-            address(0),
-            100
-        );
     }
 
     function test_benchmarkSweepCollectionMarketplaceAndRoyaltyFeesNoConduit(FuzzInputsCommonFulfillOrder memory inputs) public {
@@ -1326,141 +1643,154 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
             ? conduitKeyOne
             : bytes32(0);
 
-        uint256 sellerPaymentAmount = 85 ether;
-        uint256 calPaymentAmount = 5 ether;
-        uint256 abePaymentAmount = 10 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 45;
+        uint256 tokenId = 0;
 
-        AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
         for (uint256 i = 0; i < numItemsInBundle; i++) {
-            uint256 fakeAddressPk = 1000000 + i;
-            address fakeAddress = payable(vm.addr(fakeAddressPk));
-            vm.startPrank(fakeAddress);
-            test721_1.setApprovalForAll(address(seaport), true);
-            test721_1.setApprovalForAll(address(conduit), true);
-            vm.stopPrank();
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
 
-            uint256 tokenId = i;
-            test721_1.mint(fakeAddress, tokenId);
+                vm.startPrank(fakeAddress);
+                test721_1.setApprovalForAll(address(seaport), true);
+                test721_1.setApprovalForAll(address(conduit), true);
+                vm.stopPrank();
+        }
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
+   
+            AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
+            for (uint256 i = 0; i < numItemsInBundle; i++) {
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
+
+                tokenId++;
+                test721_1.mint(fakeAddress, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        85 ether,
+                        85 ether,
+                        payable(fakeAddress)
+                    )
+                );
+
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        5 ether,
+                        5 ether,
+                        payable(cal)
+                    )
+                );
+
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        10 ether,
+                        10 ether,
+                        payable(abe)
+                    )
+                );
+    
+                OrderComponents memory orderComponents = OrderComponents(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    seaport.getCounter(alice)
+                );
+       
+                OrderParameters memory orderParameters = OrderParameters(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    considerationItems.length
+                );
+    
+                advancedOrders[i] = AdvancedOrder(
+                    orderParameters,
                     1,
-                    1
-                )
-            );
+                    1,
+                    signOrder(
+                        seaport,
+                        fakeAddressPk,
+                        seaport.getOrderHash(orderComponents)
+                    ),
+                    "0x"
+                );
+    
+                sumPayments += 100 ether;
+    
+                delete offerItems;
+                delete considerationItems;
+    
+                offerComponents.push(FulfillmentComponent(i, 0));
+                offerComponentsArray.push(offerComponents);
+                delete offerComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 0));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 1));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
 
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    sellerPaymentAmount,
-                    sellerPaymentAmount,
-                    payable(fakeAddress)
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    calPaymentAmount,
-                    calPaymentAmount,
-                    payable(cal)
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    abePaymentAmount,
-                    abePaymentAmount,
-                    payable(abe)
-                )
-            );
-
-            OrderComponents memory orderComponents = OrderComponents(
-                fakeAddress,
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
+                considerationComponents.push(FulfillmentComponent(i, 2));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+            }
+      
+            vm.prank(bob, bob);
+            seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
+                advancedOrders,
+                new CriteriaResolver[](0),
+                offerComponentsArray,
+                considerationComponentsArray,
                 conduitKey,
-                seaport.getCounter(alice)
+                address(0),
+                100
             );
-
-            OrderParameters memory orderParameters = OrderParameters(
-                fakeAddress,
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
-                conduitKey,
-                considerationItems.length
-            );
-
-            advancedOrders[i] = AdvancedOrder(
-                orderParameters,
-                1,
-                1,
-                signOrder(
-                    seaport,
-                    fakeAddressPk,
-                    seaport.getOrderHash(orderComponents)
-                ),
-                "0x"
-            );
-
-            sumPayments += (sellerPaymentAmount + calPaymentAmount + abePaymentAmount);
 
             delete offerItems;
             delete considerationItems;
-
-            offerComponents.push(FulfillmentComponent(i, 0));
-            offerComponentsArray.push(offerComponents);
-            delete offerComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 0));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 1));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 2));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete offerComponentsArray;
+            delete considerationComponentsArray;
         }
-
-        CriteriaResolver[] memory criteriaResolvers;
-
-        vm.prank(bob, bob);
-        seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
-            advancedOrders,
-            criteriaResolvers,
-            offerComponentsArray,
-            considerationComponentsArray,
-            conduitKey,
-            address(0),
-            100
-        );
     }
 
     function test_benchmarkSweepCollectionMarketplaceAndRoyaltyFeesUseConduit(FuzzInputsCommonFulfillOrder memory inputs) public {
@@ -1470,141 +1800,154 @@ contract Benchmark is BaseOrderTest, ConsiderationEventsAndErrors {
             ? conduitKeyOne
             : bytes32(0);
 
-        uint256 sellerPaymentAmount = 85 ether;
-        uint256 calPaymentAmount = 5 ether;
-        uint256 abePaymentAmount = 10 ether;
-        uint256 sumPayments = 0;
         uint256 numItemsInBundle = 100;
+        uint256 numRuns = 45;
+        uint256 tokenId = 0;
 
-        AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
         for (uint256 i = 0; i < numItemsInBundle; i++) {
-            uint256 fakeAddressPk = 1000000 + i;
-            address fakeAddress = payable(vm.addr(fakeAddressPk));
-            vm.startPrank(fakeAddress);
-            test721_1.setApprovalForAll(address(seaport), true);
-            test721_1.setApprovalForAll(address(conduit), true);
-            vm.stopPrank();
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
 
-            uint256 tokenId = i;
-            test721_1.mint(fakeAddress, tokenId);
+                vm.startPrank(fakeAddress);
+                test721_1.setApprovalForAll(address(seaport), true);
+                test721_1.setApprovalForAll(address(conduit), true);
+                vm.stopPrank();
+        }
 
-             offerItems.push(
-                OfferItem(
-                    ItemType.ERC721,
-                    address(test721_1),
-                    tokenId,
+        for (uint256 run = 1; run <= numRuns; run++) {
+            uint256 sumPayments = 0;
+   
+            AdvancedOrder[] memory advancedOrders = new AdvancedOrder[](numItemsInBundle);
+            for (uint256 i = 0; i < numItemsInBundle; i++) {
+                uint256 fakeAddressPk = 1000000 + i;
+                address fakeAddress = vm.addr(fakeAddressPk);
+
+                tokenId++;
+                test721_1.mint(fakeAddress, tokenId);
+    
+                 offerItems.push(
+                    OfferItem(
+                        ItemType.ERC721,
+                        address(test721_1),
+                        tokenId,
+                        1,
+                        1
+                    )
+                );
+    
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        85 ether,
+                        85 ether,
+                        payable(fakeAddress)
+                    )
+                );
+
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        5 ether,
+                        5 ether,
+                        payable(cal)
+                    )
+                );
+
+                considerationItems.push(
+                    ConsiderationItem(
+                        ItemType.NATIVE,
+                        address(0),
+                        0,
+                        10 ether,
+                        10 ether,
+                        payable(abe)
+                    )
+                );
+    
+                OrderComponents memory orderComponents = OrderComponents(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    seaport.getCounter(alice)
+                );
+       
+                OrderParameters memory orderParameters = OrderParameters(
+                    fakeAddress,
+                    inputs.zone,
+                    offerItems,
+                    considerationItems,
+                    OrderType.PARTIAL_OPEN,
+                    block.timestamp,
+                    block.timestamp + 1,
+                    inputs.zoneHash,
+                    inputs.salt,
+                    conduitKey,
+                    considerationItems.length
+                );
+    
+                advancedOrders[i] = AdvancedOrder(
+                    orderParameters,
                     1,
-                    1
-                )
-            );
+                    1,
+                    signOrder(
+                        seaport,
+                        fakeAddressPk,
+                        seaport.getOrderHash(orderComponents)
+                    ),
+                    "0x"
+                );
+    
+                sumPayments += 100 ether;
+    
+                delete offerItems;
+                delete considerationItems;
+    
+                offerComponents.push(FulfillmentComponent(i, 0));
+                offerComponentsArray.push(offerComponents);
+                delete offerComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 0));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+    
+                considerationComponents.push(FulfillmentComponent(i, 1));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
 
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    sellerPaymentAmount,
-                    sellerPaymentAmount,
-                    payable(fakeAddress)
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    calPaymentAmount,
-                    calPaymentAmount,
-                    payable(cal)
-                )
-            );
-
-            considerationItems.push(
-                ConsiderationItem(
-                    ItemType.NATIVE,
-                    address(0),
-                    0,
-                    abePaymentAmount,
-                    abePaymentAmount,
-                    payable(abe)
-                )
-            );
-
-            OrderComponents memory orderComponents = OrderComponents(
-                fakeAddress,
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
+                considerationComponents.push(FulfillmentComponent(i, 2));
+                considerationComponentsArray.push(considerationComponents);
+                delete considerationComponents;
+            }
+      
+            vm.prank(bob, bob);
+            seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
+                advancedOrders,
+                new CriteriaResolver[](0),
+                offerComponentsArray,
+                considerationComponentsArray,
                 conduitKey,
-                seaport.getCounter(alice)
+                address(0),
+                100
             );
-
-            OrderParameters memory orderParameters = OrderParameters(
-                fakeAddress,
-                inputs.zone,
-                offerItems,
-                considerationItems,
-                OrderType.PARTIAL_OPEN,
-                block.timestamp,
-                block.timestamp + 1,
-                inputs.zoneHash,
-                inputs.salt,
-                conduitKey,
-                considerationItems.length
-            );
-
-            advancedOrders[i] = AdvancedOrder(
-                orderParameters,
-                1,
-                1,
-                signOrder(
-                    seaport,
-                    fakeAddressPk,
-                    seaport.getOrderHash(orderComponents)
-                ),
-                "0x"
-            );
-
-            sumPayments += (sellerPaymentAmount + calPaymentAmount + abePaymentAmount);
 
             delete offerItems;
             delete considerationItems;
-
-            offerComponents.push(FulfillmentComponent(i, 0));
-            offerComponentsArray.push(offerComponents);
-            delete offerComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 0));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 1));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
-
-            considerationComponents.push(FulfillmentComponent(i, 2));
-            considerationComponentsArray.push(considerationComponents);
-            delete considerationComponents;
+            delete basicOrderParameters;
+            delete baseOrderComponents;
+            delete offerComponentsArray;
+            delete considerationComponentsArray;
         }
-
-        CriteriaResolver[] memory criteriaResolvers;
-
-        vm.prank(bob, bob);
-        seaport.fulfillAvailableAdvancedOrders{ value: sumPayments }(
-            advancedOrders,
-            criteriaResolvers,
-            offerComponentsArray,
-            considerationComponentsArray,
-            conduitKey,
-            address(0),
-            100
-        );
     }
 
     function _configureBasicOrderParametersEthTo721(
